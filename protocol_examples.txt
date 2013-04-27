@@ -1,0 +1,58 @@
+Server Hello message:
+SERVER/HELLO
+SERVER/INFO&www.something.com:4000
+SERVICE/INFO&f,3,arr
+SERVICE/INFO&g,2,arr
+
+Server Unknown Service:
+SERVER/UNKNOWN
+SERVICE/INFO&f,2,arr
+SERVER/INFO&www.secondary1.com:4010
+SERVER/INFO&www.secondary2.com:5000
+
+or
+
+SERVER/UNKNOWN
+SERVICE/INFO&f,2,arr
+SERVER/INFO&none
+
+Server Mismatched arguments:
+SERVER/MISMATCH&f,2,3
+
+Server Busy:
+SERVER/BUSY
+SERVICE/INFO&f,2,arr
+SERVER/INFO&www.secondary1.com:4010
+SERVER/INFO&www.secondary2.com:5000
+
+Server Error:
+SERVER/ERROR&(Optional error msg to present to the client)
+
+Server Result:
+(an array of ints.
+ type = arr
+ len = number of elements in the array. 
+ Elements are delimited by commas.)
+SERVER/RESULT&arr&10&1,2,3,4,5,6,7,8,9,0
+
+or
+
+(raw binary data.
+ type = raw.
+ len = number of bytes that make up the result. 
+ It is assumed the client knows how to interperate the data.)
+SERVER/RESULT&raw&256
+(data)......
+
+-----------------------------------------------------------------------------------------------------------
+
+Service announce message:
+SERVICE/INFO&f,3,arr
+
+Service Error message:
+SERVICE/ERROR&(Optional error message);
+
+-----------------------------------------------------------------------------------------------------------
+
+Client Request message:
+CLIENT/REQUEST&f,4,5,6
