@@ -17,7 +17,9 @@ SERVICE/INFO&f,2,arr
 SERVER/INFO&none
 
 Server Mismatched arguments:
-SERVER/MISMATCH&f,2,3
+SERVER/RESULT
+SERVICE/MISMATCH&2
+SERVICE/INFO&f,3,arr
 
 Server Busy:
 SERVER/BUSY
@@ -33,6 +35,7 @@ Server Result:
  type = arr
  len = number of elements in the array. 
  Elements are delimited by commas.)
+SERVER/RESULT
 SERVER/RESULT&arr&10&1,2,3,4,5,6,7,8,9,0
 
 or
@@ -41,7 +44,8 @@ or
  type = raw.
  len = number of bytes that make up the result. 
  It is assumed the client knows how to interperate the data.)
-SERVER/RESULT&raw&256
+SERVER/RESULT
+SERVICE/RESULT&raw&256
 (data)......
 
 -----------------------------------------------------------------------------------------------------------

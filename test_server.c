@@ -110,7 +110,7 @@
  {
     char outputBuffer[1024];
     printf("Sending Hello msg\n");
-    strcpy(outputBuffer, "SERVER/HELLO\nSERVER/INFO&www.test_server.com:4000\nSERVICE/INFO&f,3,arr\nSERVICE/INFO&g,2,arr\n");
+    strcpy(outputBuffer, "SERVER/HELLO\nSERVER/INFO&www.test_server.com:4000\nSERVICE/INFO&f,3,arr\nSERVICE/INFO&g,3,arr\n");
     exchange_server_info(outputBuffer, serverName, serverPort);
  }
 

@@ -39,22 +39,26 @@ char* parse_function_name(const char* path)
  */
 int main( int argc, const char* argv[] )
 {
+  char* functionName;
+  functionName = parse_function_name(argv[0]);
+  
+  char returnType[] = "arr";
+  int numArgs = 3;
+
   // No args.
   if( argc < 2 ) {
     //get the function name from the filepath
-    char* functionName;
-    functionName = parse_function_name(argv[0]);
-    printf("SERVICE/INFO&%s,3,arr\n", functionName);
+    printf("SERVICE/INFO&%s,%d,%s\n", functionName, numArgs, returnType);
     return 0;
   }
   else if( argc != 4)
   {
-    printf("SERVICE/ERROR&Argument Mismatch\n");
+    printf("SERVICE/MISMATCH&%d\nSERVICE/INFO&%s,%d,%s\n", (argc - 1), functionName, numArgs, returnType);
     return 0;
   }
   else
   {
-    printf("42\n");
+    printf("SERVICE/RESULT&arr&1&42\n");
     return 0;
   }
 }

@@ -28,5 +28,28 @@
  */
 int main( int argc, const char* argv[] )
 {
+  char outputBuffer[512];
+  char inputBuffer[1024];
+  char serverName[255];
+  int serverPort;
+
+  strcpy(serverName, argv[1]);
+  serverPort = atoi(argv[2]);
+
+  printf("requesting f(4,5,6) from %s:%d\n", serverName, serverPort);
+  strcpy(outputBuffer, "CLIENT/REQUEST&f,4,5,6\n");
+
+  int sockfd = tcp_connect(serverName, serverPort);
+  write(sockfd, outputBuffer, strlen(outputBuffer));
+
+  int size = read( sockfd, inputBuffer, sizeof(inputBuffer) );
+  if(size > 0)
+  {
+    inputBuffer[size] = '\0';
+    printf("server Response:\n");
+    printf("%s\n", inputBuffer);
+  }
+  close(sockfd);
+
   return 0;
 }

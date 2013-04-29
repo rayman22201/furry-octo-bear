@@ -55,7 +55,7 @@ void parse_host_info(char* buffer, char* name, int* portNum)
     printf("Not a Valid Server Announce String.\n");
     exit(1);
   }
-  
+
   token = strtok_r(NULL, "&", &savePtr);
   parse_host_string(token, name, portNum);
 }
@@ -171,7 +171,7 @@ void parse_server_result(char* buffer, char* resultType, int* resultLen, void** 
 void parse_client_request(char* buffer, char* serviceName, int* argc, int* argv)
 {
   char* savePtr;
-  char myBuffer[512];
+  char myBuffer[1024];
   char* header;
 
   strcpy(myBuffer, buffer);
@@ -189,7 +189,10 @@ void parse_client_request(char* buffer, char* serviceName, int* argc, int* argv)
   while(token != NULL)
   {
     token = strtok_r(NULL, "&,\n", &savePtr);
-    argv[(*argc)] = atoi(token);
-    (*argc)++;
+    if(token != NULL)
+    {
+      argv[(*argc)] = atoi(token);
+      (*argc)++;
+    }
   }
 }

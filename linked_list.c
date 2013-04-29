@@ -44,6 +44,11 @@ linkedListStruct* linkedList_newList()
   return newList;
 }
 
+int linkedList_isEmptyList(linkedListStruct* cur_list)
+{
+  return ( cur_list->head == cur_list->tail );
+}
+
 linkedListNode* linkedList_addNode(linkedListStruct* cur_list, void* newData)
 {
   linkedListNode* tailNode;

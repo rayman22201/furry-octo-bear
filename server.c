@@ -58,7 +58,7 @@ ServiceNode* register_service(char* name, int numArgs, char* returnType, char* s
   newService->numArgs = numArgs;
   newService->serverPort = port;
 
-  sprintf(newService->signature, "%s,%d,%s", name, numArgs, returnType);
+  sprintf(newService->signature, "/%s/", name);
   printf("  ServiceSignature: %s\n", newService->signature);
   hashTable_addElement(servicesTable, newService->signature, (void*)newService);
   return newService;
@@ -71,7 +71,7 @@ void register_local_service(char* filepath)
   char returnType[10];
   int numArgs = -1;
   char serverName[] = "localhost";
-  int serverPort = 0;
+  int serverPort = myPort;
 
   //run the service with no args to get it's info
   FILE* fp;
@@ -187,6 +187,121 @@ int exchange_server_info(char* foreignServerName, int foreignServerPort)
   return 1;
 }
 
+int am_I_busy()
+{
+  int chance = rand() % 100; 
+  if(chance < 50)
+  {
+    return 0;
+  }
+  else
+  {
+    return 1;
+  }
+}
+
+void print_alt_servers(char* outputBuffer, linkedListStruct* serviceList)
+{
+  ServiceNode* curNode;
+  char curAltServer[255];
+
+  linkedList_reset_iterator(serviceList);
+  curNode = linkedList_foreach(serviceList);
+  while(curNode != NULL)
+  {
+    if(strstr(curNode->serverName, "localhost") == NULL)
+    {
+      sprintf(curAltServer, "SERVER/INFO%s&:%d\n", curNode->serverName, curNode->serverPort);
+      strcat(outputBuffer, curAltServer);
+    }
+    curNode = linkedList_foreach(serviceList);
+  }
+}
+
+int run_local_service(char* outputBuffer, ServiceNode* curService, int argc, const int* argv)
+{
+  char command[1024];
+
+  sprintf(command, "./services/%s.service ", curService->serviceName);
+  int i;
+  char strArg[10];
+  for(i = 0; i < argc; i++)
+  {
+    sprintf(strArg, "%d ", argv[i]);
+    strcat(command, strArg);
+  }
+
+  FILE* fp;
+  fp = popen(command, "r");
+  if(fp == NULL)
+  {
+    perror("Unable to run local Service");
+    exit(1);
+  }
+  char commandBuffer[2048];
+  fread(commandBuffer, sizeof(char), (sizeof(commandBuffer) - 1), fp);
+  sprintf(outputBuffer, "SERVER/RESULT\n");
+  strcat(outputBuffer, commandBuffer);
+
+  return 1;
+}
+
+int run_service(char* outputBuffer, char* functionName, int argc, const int* argv)
+{
+  char key[255];
+  linkedListStruct* serviceList;
+
+  sprintf(key, "/%s/", functionName);
+  serviceList = (linkedListStruct*)hashTable_lookup(servicesTable, key);
+
+  if(linkedList_isEmptyList(serviceList))
+  {
+    sprintf(outputBuffer, "SERVER/UNKNOWN\nSERVICE/INFO&%s,%d\nSERVER/INFO&none", functionName, argc);
+    return 0;
+  }
+  else
+  {
+    linkedList_reset_iterator(serviceList);
+    ServiceNode* curNode;
+    curNode = linkedList_foreach(serviceList);
+    if( strstr(curNode->serverName, "localhost") != NULL )
+    {
+      // We have a copy of this service locally.
+      // are we busy?
+      if(!am_I_busy())
+      {
+        // Run the service and return the result
+        run_local_service(outputBuffer, curNode, argc, argv);
+        return 1;
+      }
+      else
+      {
+        // I'm busy return some alternates
+        ServiceNode* nextNode = linkedList_foreach(serviceList);
+        if(nextNode == NULL)
+        {
+          // There are not alternates. Tough luck
+          sprintf(outputBuffer, "SERVER/BUSY\nSERVICE/INFO&%s,%d,%s\nSERVER/INFO&none\n", curNode->serviceName, curNode->numArgs, curNode->returnType);
+        }
+        else
+        {
+          sprintf(outputBuffer, "SERVER/BUSY\nSERVICE/INFO&%s,%d,%s\n", curNode->serviceName, curNode->numArgs, curNode->returnType);
+          print_alt_servers(outputBuffer, serviceList);
+        }
+        return 0;
+      }
+    }
+    else
+    {
+      // We don't have this service but we know some servers that do
+      sprintf(outputBuffer, "SERVER/UNKNOWN\nSERVICE/INFO&%s,%d,%s\n", curNode->serviceName, curNode->numArgs, curNode->returnType);
+      print_alt_servers(outputBuffer, serviceList);
+      return 0;
+    }
+  }
+  return 1;
+}
+
 int process_request(int inputfd)
 {
   // init
@@ -199,12 +314,9 @@ int process_request(int inputfd)
   if(bytesRead < 0)
   {
     printf("Read Error\n");
-    return 0;
+    exit(1);
   }
   inputBuff[bytesRead] = '\0';
-
-  printf("Received Msg:\n");
-  printf("%s\n", inputBuff);
 
   // Determine what kind of request this is
   if(strstr(inputBuff, "SERVER/HELLO") != NULL)
@@ -220,8 +332,28 @@ int process_request(int inputfd)
   else if(strstr(inputBuff, "CLIENT/REQUEST") != NULL)
   {
     // Client Request;
-    char* requestString = strtok(inputBuff, "&\n");
-    printf("Client Requested: %s\n", requestString);
+    char outputBuffer[2048];
+    char serviceName[255];
+    int argc;
+    int argv[100];
+
+    parse_client_request(inputBuff, serviceName, &argc, argv);
+    printf("Client requested %s with %d arguments:\n", serviceName, argc);
+    int i;
+    for(i = 0; i < argc; i++)
+    {
+      printf("  arg %d: %d\n", i, argv[i]);
+    }
+
+    run_service(outputBuffer, serviceName, argc, argv);
+
+    write(inputfd, outputBuffer, strlen(outputBuffer));
+    close(inputfd);
+  }
+  else
+  {
+    printf("Unsupported Request Recieved\n");
+    return 0;
   }
 
   return 1;

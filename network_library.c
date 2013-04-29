@@ -35,6 +35,7 @@ int hostname_to_ip(char * hostname , char* ip)
     {
         // get the host info
         herror("gethostbyname");
+        exit(1);
         return 1;
     }
  
@@ -60,6 +61,7 @@ int tcp_connect(char* serverName, int serverPort)
   if(sockfd < 0)
   {
     printf("\n Error : Could not create socket \n");
+    exit(1);
     return -1;
   }
 
@@ -71,12 +73,14 @@ int tcp_connect(char* serverName, int serverPort)
   if(inet_pton(AF_INET, serverIP, &serv_addr.sin_addr)<=0)
   {
     printf("\n inet_pton error occured\n");
+    exit(1);
     return -1;
   }
 
   if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
   {
     printf("\n Error : Connect Failed \n");
+    exit(1);
     return -1;
   }
 
@@ -96,7 +100,8 @@ int tcp_listen(int port)
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
   if( (bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) < 0)
   {
-    printf("Unable to bind to port: %d", port);
+    printf("Unable to bind to port: %d\n", port);
+    exit(1);
     return -1;
   }
 
