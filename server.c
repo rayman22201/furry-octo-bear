@@ -92,8 +92,6 @@ void register_local_service(char* filepath)
 
   // Parse the string and register the service
   parse_service_info(descriptionBuffer, serviceName, &numArgs, returnType);
-  printf("Local Service Detected:\n");
-  printf("  Name: %s, numArgs: %d, returnType: %s\n", serviceName, numArgs, returnType);
   
   // Add the service to the table
   register_service(serviceName, numArgs, returnType, serverName, serverPort);
@@ -105,6 +103,7 @@ void find_local_services()
   struct dirent *curFile;
   dirPtr = opendir ("./services");
 
+  printf("Local Services Detected from ./services directory:\n");
   if (dirPtr != NULL)
   {
     curFile = readdir(dirPtr);
@@ -126,45 +125,125 @@ void find_local_services()
   }
 }
 
+int add_server_info(char* buffer)
+{
+  char inputBuff[1024];
+  char foreignServerName[255];
+  int foreignServerPort;
+  char* token;
+
+  strcpy(inputBuff, buffer);
+  token = strtok(inputBuff, "\n");
+  if(strstr(token,"SERVER/HELLO") == NULL)
+  {
+    printf("Server sent an invalid Server Announce message\n");
+    return 1;
+  }
+  // The next line contains the server info.
+  token = strtok(NULL, "\n");
+  // Parse out the server info
+  parse_host_info(token, foreignServerName, &foreignServerPort);
+
+  // The rest of the lines are service info messages. Add these services to the services table   
+  char tokSavePtr;
+  char serviceName[255];
+  char serviceReturnType[10];
+  int serviceNumArgs;
+
+  printf("Foreign Services Detected from %s:%d:\n", foreignServerName, foreignServerPort);
+  while(token != NULL)
+  {
+    memset(serviceName, '\0', sizeof(serviceName));
+    memset(serviceReturnType, '\0', sizeof(serviceReturnType));
+    serviceNumArgs = 0;
+    token = strtok(NULL, "\n");
+    if(token != NULL)
+    {
+      parse_service_info(token, serviceName, &serviceNumArgs, serviceReturnType);
+      register_service(serviceName, serviceNumArgs, serviceReturnType, foreignServerName, foreignServerPort);
+    }
+  }
+  return 0;
+}
+
 int exchange_server_info(char* foreignServerName, int foreignServerPort)
 {
   int sockfd;
-  char recvBuff[1024];
   int size;
-  struct sockaddr_in serv_addr; 
-  memset(recvBuff, '0',sizeof(recvBuff));
+  struct sockaddr_in serv_addr;
+  char inputBuff[1024];
+  memset(inputBuff, '\0', sizeof(inputBuff) );
 
   sockfd = tcp_connect(foreignServerName, foreignServerPort);
   
   write(sockfd, myHelloMsg, strlen(myHelloMsg));
-  size = read( sockfd, recvBuff, (sizeof(recvBuff)-1) );
-  // Don't close the socket because we assume the other server will close the socket when she is done sending her hello message to us.
-  // I.E. we are acting as a client in this case.
+  size = read( sockfd, inputBuff, sizeof(inputBuff) );
+  close(sockfd);
   if( size > 0 )
   {
-    char* token;
-    token = strtok(recvBuff, "\n");
-    if(strstr(token,"SERVER/HELLO") == NULL)
-    {
-      printf("%s sent an invalid Server Announce message\n", foreignServerName);
-      return 1;
-    }
-    // Skip the next line. It contains the server info, which we already know.
-    token = strtok(NULL, "\n");
-
-    // The rest of the lines are service info messages. Add these services to the services table   
-    while(token != NULL)
-    {
-      token = strtok(NULL, "\n");
-      char serviceName[255];
-      char serviceReturnType[10];
-      int serviceNumArgs;
-      parse_service_info(token, serviceName, &serviceNumArgs, serviceReturnType);
-      register_service(serviceName, serviceNumArgs, serviceReturnType, foreignServerName, foreignServerPort);
-    }
+    add_server_info(inputBuff);
     return 0;
   }
   return 1;
+}
+
+int process_request(int inputfd)
+{
+  // init
+  int bytesRead = 0;
+  char inputBuff[1024];
+  memset(inputBuff, '\0', sizeof(inputBuff));
+  
+  // Read into the input buffer
+  bytesRead = read(inputfd, inputBuff, sizeof(inputBuff)-1);
+  if(bytesRead < 0)
+  {
+    printf("Read Error\n");
+    return 0;
+  }
+  inputBuff[bytesRead] = '\0';
+
+  printf("Received Msg:\n");
+  printf("%s\n", inputBuff);
+
+  // Determine what kind of request this is
+  if(strstr(inputBuff, "SERVER/HELLO") != NULL)
+  {
+    // Server Hello msg;
+    // send our own hello message in return
+    write(inputfd, myHelloMsg, strlen(myHelloMsg));
+    // close the connection
+    close(inputfd);
+    // parse their hello message and add to our services table
+    add_server_info(inputBuff);
+  }
+  else if(strstr(inputBuff, "CLIENT/REQUEST") != NULL)
+  {
+    // Client Request;
+    char* requestString = strtok(inputBuff, "&\n");
+    printf("Client Requested: %s\n", requestString);
+  }
+
+  return 1;
+}
+
+void accept_requests()
+{
+  int listenfd = 0;
+  int connfd = 0;
+  // Accept Requests Forever
+  //  if msg is from a Server
+  //    Add the info to my services table
+  //  if msg is from a Client
+  //    attempt to process the request
+  // End While
+  listenfd = tcp_listen(myPort);
+  printf("I'm now listening on port: %d\n", myPort);
+  while(1)
+  {
+    connfd = accept(listenfd, (struct sockaddr*)NULL, NULL);
+    process_request(connfd);
+  }
 }
 
 /**
@@ -175,6 +254,12 @@ int exchange_server_info(char* foreignServerName, int foreignServerPort)
  */
 int main( int argc, const char* argv[] )
 {
+  if(argc < 2)
+  {
+    printf("invalid arguments provided. Please see documentation for proper use of the server.");
+    return 1;
+  }
+
   //initialize the services table
   servicesTable = hashTable_create(50, &linkedList_free_function, &linkedList_init_function, &linkedList_add_function, &linkedList_remove_function);
   //initalize a list of my local services
@@ -202,6 +287,7 @@ int main( int argc, const char* argv[] )
     strcpy(localServerStr, argv[1]);
     parse_host_string(localServerStr, myHostName, &myPort);
   }
+  printf("Using HostName: %s\n", myHostName);
 
   //generate my hello message 
   sprintf(myHelloMsg, "SERVER/HELLO\nSERVER/INFO&%s:%d\n", myHostName, myPort);
@@ -214,29 +300,27 @@ int main( int argc, const char* argv[] )
     serviceString = linkedList_foreach(myServices);
   }
 
-  // Read a configuration of other known servers
-  //  For each server
-  //    Send a Hello Message
-  //  End For
-  int i;
-  for(i = 2; i < argc; i++)
+  if(argc > 2)
   {
-    //parse the server info;
-    char curServerString[255];
-    char* curServerName;
+    // Read a configuration of other known servers
+    //  For each server
+    //    Send a Hello Message
+    //  End For
+    int i;
+    char curServerString[512];
+    char curServerName[255];
     int curServerPort;
-    strcpy(curServerString, argv[i]);
-    parse_host_string(curServerString, curServerName, &curServerPort);
+    for(i = 2; i < argc; i++)
+    {
+      //parse the server info;
+      strcpy(curServerString, argv[i]);
+      parse_host_string(curServerString, curServerName, &curServerPort);
 
-    //Introduce myself to the other servers
-    //@TODO: If I make linked list thread safe, then I can do this in a multithreaded fashion.
-    exchange_server_info(curServerName, curServerPort);
+      //Introduce myself to the other servers
+      //@TODO: If I make linked list thread safe, then I can do this in a multithreaded fashion.
+      exchange_server_info(curServerName, curServerPort);
+    }
   }
 
-  // Accept Requests Forever
-  //  if msg is from a Server
-  //    Add the info to my services table
-  //  if msg is from a Client
-  //    attempt to process the request
-  // End While
+  accept_requests();
 }

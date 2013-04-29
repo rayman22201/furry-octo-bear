@@ -29,9 +29,9 @@ int hostname_to_ip(char * hostname , char* ip)
 {
     struct hostent *he;
     struct in_addr **addr_list;
-    int i;
-         
-    if ( (he = gethostbyname( hostname ) ) == NULL) 
+    int i;    
+    he = gethostbyname( hostname );
+    if ( he == NULL) 
     {
         // get the host info
         herror("gethostbyname");
@@ -100,5 +100,7 @@ int tcp_listen(int port)
     return -1;
   }
 
-  return listenfd; 
+  listen(listenfd, 10);
+
+  return listenfd;
 }
