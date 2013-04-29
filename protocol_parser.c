@@ -196,3 +196,26 @@ void parse_client_request(char* buffer, char* serviceName, int* argc, int* argv)
     }
   }
 }
+
+void parse_client_input(char* buffer, char* functionName, int* argc, int* args)
+{
+  char* savePtr;
+  char* token;
+  char myBuffer[1024];
+
+  strcpy(myBuffer, buffer);
+  token = strtok_r(myBuffer, "(,)", &savePtr);
+  strcpy(functionName, token);
+
+  int count = 0;
+  while(token != NULL)
+  {
+    token = strtok_r(NULL, "(,)", &savePtr);
+    if(token != NULL)
+    {
+      args[count] = atoi(token);
+      count++;
+    }
+  }
+  (*argc) = count;
+}
