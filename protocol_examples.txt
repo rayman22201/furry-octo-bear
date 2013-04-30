@@ -36,7 +36,7 @@ Server Result:
  len = number of elements in the array. 
  Elements are delimited by commas.)
 SERVER/RESULT
-SERVER/RESULT&arr&10&1,2,3,4,5,6,7,8,9,0
+SERVICE/RESULT&arr&10&1,2,3,4,5,6,7,8,9,0
 
 or
 

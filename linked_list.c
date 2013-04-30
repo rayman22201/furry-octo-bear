@@ -76,12 +76,10 @@ void linkedList_reset_iterator(linkedListStruct* cur_list)
 
 linkedListNode* linkedList_iterate(linkedListStruct* cur_list)
 {
-  linkedListNode* cur_node;
-  cur_node = cur_list->curNode;
-  if(cur_node != NULL)
+  if(cur_list->curNode != NULL)
   {
-    cur_list->curNode = cur_node->nextNode;
-    return cur_node;
+    cur_list->curNode = (cur_list->curNode)->nextNode;
+    return cur_list->curNode;
   }
   else
   {
@@ -199,7 +197,15 @@ void linkedList_freeAllButFirst(linkedListStruct* cur_list)
     do
     {
       curNode = linkedList_iterate(cur_list);
-      free(curNode);
+      if(curNode != NULL)
+      {
+        if(curNode->data != NULL)
+        {
+          free(curNode->data);
+          curNode->data = NULL;
+        }
+        free(curNode);
+      }
     } while(curNode != NULL);
     firstNode->nextNode = NULL;
     cur_list->tail = firstNode;

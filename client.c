@@ -32,6 +32,11 @@ typedef struct
   int serverPort; // In Network Byte Order.
 } ServerNode;
 
+linkedListStruct* serverList;
+ServerNode* primaryServer;
+int busyFlag = 0;
+int unknownFlag = 0;
+
 int send_client_request(char* requestString, ServerNode* curServer)
 {
   int sockfd = tcp_connect(curServer->serverName, curServer->serverPort);
@@ -39,61 +44,168 @@ int send_client_request(char* requestString, ServerNode* curServer)
   return sockfd;
 }
 
-linkedListStruct* parse_alts(char* altServerString)
+void add_alts(char* serverResponse)
 {
-  linkedListStruct* serverList;
-  serverList = linkedList_newList();
+  char* token;
+  ServerNode* newServer;
 
-  //parse the servers into a linkedlist of ServerNodes
-
-  return serverList;
+  //SERVER/MSG
+  token = strtok(serverResponse, "\n");
+  //SERVICE/INFO
+  token = strtok(NULL, "\n");
+  // The rest are server info strings
+  while(token != NULL)
+  {
+    token = strtok(NULL, "\n");
+    if(token != NULL)
+    {
+      newServer = malloc(sizeof(ServerNode));
+      parse_server_info(token, newServer->serverName, &(newServer->serverPort));
+      linkedList_addNode(serverList, newServer);
+    }
+  }
 }
 
-void try_alt(char* responseBuffer, linkedListStruct* altList)
-{
-
-}
-
-void parse_server_response(char* responseBuffer)
+int parse_server_response(char* responseBuffer)
 {
   if(strstr(responseBuffer, "SERVER/RESULT") != NULL)
   {
+    busyFlag = 0;
+    unknownFlag = 0;
     // Parse the Service Response
     if(strstr(responseBuffer, "SERVICE/MISMATCH") != NULL)
     {
+      char* token;
+      char* savePtr;
+      char functionName[255];
+      char returnType[10];
+      int wrongNumArgs;
+      int rightNumArgs;
+
+      //SERVER/RESULT
+      token = strtok(responseBuffer, "\n");
+      //SERVICE/MISMATCH&num
+      token = strtok(NULL, "\n");
+      //SERVICE/MISMATCH
+      strtok_r(token, "&", &savePtr);
+      //num
+      wrongNumArgs = atoi(strtok_r(NULL, "&", &savePtr));
+      //SERVICE/INFO
+      token = strtok(NULL, "\n");
+      parse_service_info(token, functionName, &rightNumArgs, returnType);
+
       // Wrong number of args. print an error msg
+      printf("Wrong number of arguments given.\n  You gave %d arguments, but %s requires %d arguments.\nPlease Try again.\n\n", wrongNumArgs, functionName, rightNumArgs);
+      return 0;
     }
     else if(strstr(responseBuffer, "SERVICE/ERROR") != NULL)
     {
       // Something went wrong at the service level
+      printf("There was an error executing the function.\n");
+      return 0;
     }
     else if(strstr(responseBuffer, "SERVICE/RESULT") != NULL)
     {
       // Yay, we got a good result. Print the answer.
+      char* token;
+      char* savePtr;
+      char resultType[10];
+
+      //SERVER/RESULT
+      token = strtok(responseBuffer, "\n");
+      //SERVICE/RESULT&type&numResults&results
+      token = strtok(NULL, "\n");
+      //SERVICE/RESULT
+      strtok_r(token, "&", &savePtr);
+      strcpy(resultType, strtok_r(NULL, "&", &savePtr));
+      if(strstr(resultType, "arr") != NULL)
+      {
+        // We have an array of ints;
+        int numResults;
+        int results[100];
+        numResults = atoi(strtok_r(NULL, "&", &savePtr));
+        printf("Server returned an array of %d integers:\n", numResults);
+
+        int i;
+        for(i = 0; i < numResults; i++)
+        {
+          results[i] = atoi(strtok_r(NULL, "&", &savePtr));
+          printf("  result[%d] : %d\n", i, results[i]);
+        }
+        printf("\n");
+        return 1;
+      }
+      else
+      {
+        printf("Sorry, This client does not support results of type %s\n\n", resultType);
+        return 0;
+      }
     }
     else
     {
       printf("Invalid Service response.\n");
-      return;
+      return 0;
     }
   }
   else if(strstr(responseBuffer, "SERVER/BUSY") != NULL)
   {
-    // Busy Server, either try the alts or print an error.
+    busyFlag = 1;
+    // if we have any alts, add them to the server list
+    if(strstr(responseBuffer, "SERVER/INFO&none") == NULL)
+    {
+      add_alts(responseBuffer);
+    }
+    return 0;
   }
   else if(strstr(responseBuffer, "SERVER/UNKNOWN") != NULL)
   {
-    // Unknown function. Either try alts or print an error.
+    unknownFlag = 1;
+    // if we have any alts, add them to the server list
+    if(strstr(responseBuffer, "SERVER/INFO&none") == NULL)
+    {
+      add_alts(responseBuffer);
+    }
+    return 0;
   }
   else if(strstr(responseBuffer, "SERVER/ERROR") != NULL)
   {
     // Some misc server error
+    parse_server_error(responseBuffer);
+    return 0;
   }
   else
   {
     printf("Invalid Server Response.\n");
-    return;
+    return 0;
   }
+  return 0;
+}
+
+void build_request_string(char* outputBuffer, char* functionName, int argc, const int* argv)
+{
+  sprintf(outputBuffer, "CLIENT/REQUEST&%s", functionName);
+  int i = 0;
+  char argStr[10];
+  for(i = 0; i < argc; i++)
+  {
+    sprintf(argStr, ",%d", argv[i]);
+    strcat(outputBuffer, argStr);
+  }
+  strcat(outputBuffer, "\n");
+}
+
+int execute_server_request(char* requestString, ServerNode* curServer)
+{
+  char responseBuffer[1024];
+  memset(responseBuffer, '\0', sizeof(responseBuffer));
+  int responsefd = send_client_request(requestString, curServer);
+  int size = read( responsefd, responseBuffer, sizeof(responseBuffer) );
+  if(size > 0)
+  {
+    return parse_server_response(responseBuffer);
+  }
+  printf("Server Responded with no data.\n");
+  return 0;
 }
 
 /**
@@ -111,12 +223,13 @@ int main( int argc, const char* argv[] )
   }
   char inputBuffer[1024];
   char outputBuffer[1024];
-  char responseBuffer[1024];
 
   char serverString[255];
-  ServerNode* primaryServer;
   primaryServer = malloc(sizeof(ServerNode));
 
+  serverList = linkedList_newList();
+  linkedList_addNode(serverList, primaryServer);
+  ServerNode* curServer;
   char functionName[255];
   int functionArgc;
   int functionArgs[100];
@@ -129,7 +242,6 @@ int main( int argc, const char* argv[] )
   {
     memset(inputBuffer, '\0', sizeof(inputBuffer));
     memset(outputBuffer, '\0', sizeof(outputBuffer));
-    memset(responseBuffer, '\0', sizeof(responseBuffer));
     functionArgc = 0;
 
     printf("Enter a function to process. Type 'help' for usage information:\n");
@@ -149,55 +261,26 @@ int main( int argc, const char* argv[] )
     }
     parse_client_input(inputBuffer, functionName, &functionArgc, functionArgs);
 
-    sprintf(outputBuffer, "CLIENT/REQUEST&%s", functionName);
-    int i = 0;
-    char argStr[10];
-    for(i = 0; i < functionArgc; i++)
-    {
-      sprintf(argStr, ",%d", functionArgs[i]);
-      strcat(outputBuffer, argStr);
-    }
-    strcat(outputBuffer, "\n");
-    printf("Request String:\n%s", outputBuffer);
+    build_request_string(outputBuffer, functionName, functionArgc, functionArgs);
 
-    int responsefd = send_client_request(outputBuffer, primaryServer);
-    int size = read( responsefd, responseBuffer, sizeof(responseBuffer) );
-    if(size > 0)
+    // For each server in the server list, send a request and process the result
+    unknownFlag = 0;
+    busyFlag = 0;
+    linkedList_reset_iterator(serverList);
+    curServer = linkedList_foreach(serverList);
+    while(curServer != NULL)
     {
-      printf("Server Response:\n%s\n", responseBuffer);
-      parse_server_response(responseBuffer);
+      execute_server_request(outputBuffer, curServer);
+      curServer = linkedList_foreach(serverList); 
     }
-  }
-  //get the name and port of my primary server from the command line
-  //Add primary server to the server list
-  //Set Unknown and Busy flags to false
-  //Set exit flag to false.
-  //
-  //While exit flag is false
-  //  Prompt the user for input: i.e. a function to compute with parameters: f(3,2)
-  //  if user enters exit command
-  //    set exit flag to true
-  //    break
-  //
-  //  For each server in server list
-  //   send request
-  //   if response is the answer
-  //    set unknown and busy flags to false
-  //    display the answer
-  //    break
-  //   if response is unknown
-  //    set unknown flag to true.
-  //    add alternate servers to server list
-  //   if response is busy signal
-  //    set busy flag to true.
-  //    add alternate servers to server list
-  //  End For
-  //  
-  //  if busy flag is true 
-  //    display error message
-  //  if unknown flag is true
-  //    display error message
-  //  set unknown and busy flags to false
-  //  Remove all but first server from the server list
-  //End While  
+    if(busyFlag == 1)
+    {
+      printf("All Known Servers are Busy Right Now. :-(\n");
+    }
+    else if(unknownFlag == 1)
+    {
+      printf("Unable to find any Server that knows how to execute %s with %d arguments\n", functionName, functionArgc);
+    }
+    linkedList_freeAllButFirst(serverList);
+  }  
 }

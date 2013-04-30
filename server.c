@@ -211,7 +211,7 @@ void print_alt_servers(char* outputBuffer, linkedListStruct* serviceList)
   {
     if(strstr(curNode->serverName, "localhost") == NULL)
     {
-      sprintf(curAltServer, "SERVER/INFO%s&:%d\n", curNode->serverName, curNode->serverPort);
+      sprintf(curAltServer, "SERVER/INFO&%s:%d\n", curNode->serverName, curNode->serverPort);
       strcat(outputBuffer, curAltServer);
     }
     curNode = linkedList_foreach(serviceList);
