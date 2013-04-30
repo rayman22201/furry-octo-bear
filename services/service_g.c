@@ -1,9 +1,9 @@
 /**
- * @File service_f.c
+ * @File service_g.c
  * CS 470 Assignment 2
  * Ray Imber
  * Implements a service for use with an assignment 2 server.
- * This is just a test service that always returns 42.
+ * Returns the Fibonacci sequence between the range of the two input values
  */
 
 #include <stdio.h>
@@ -44,7 +44,7 @@ int main( int argc, const char* argv[] )
   functionName = parse_function_name(argv[0]);
   
   char returnType[] = "arr";
-  int numArgs = 3;
+  int numArgs = 2;
 
   // No args.
   if( argc < 2 ) {
@@ -59,7 +59,44 @@ int main( int argc, const char* argv[] )
   }
   else
   {
-    printf("SERVICE/RESULT&arr&1&42\n");
+    char outputBuffer[1024];
+    memset(outputBuffer, '\0', sizeof(outputBuffer));
+    char resultHeader[255];
+    char curVal[10];
+    int start = atoi(argv[1]);
+    int end = atoi(argv[2]);
+    int range = end - start;
+    int curFib = 0;
+    int prevFib = 0;
+    int prevFib2 = 0;
+
+    int i = 0;
+    int fibCount = 0;
+    while(curFib < end)
+    {
+      if(i < 2)
+      {
+        prevFib2 = prevFib;
+        prevFib = curFib;
+        curFib = i;
+      }
+      else
+      {
+        prevFib2 = prevFib;
+        prevFib = curFib;
+        curFib = prevFib + prevFib2;
+      }
+      if( (curFib > start) && (curFib < end) )
+      {
+        sprintf(curVal, "%d,", curFib);
+        strcat(outputBuffer, curVal);
+        fibCount++;
+      }
+      i++;
+    }
+    outputBuffer[ (strlen(outputBuffer)-1) ] = '\0';
+    sprintf(resultHeader, "SERVICE/RESULT&arr&%d&", fibCount);
+    printf("%s%s\n", resultHeader, outputBuffer);
     return 0;
   }
 }

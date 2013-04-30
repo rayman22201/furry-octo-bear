@@ -388,7 +388,7 @@ int main( int argc, const char* argv[] )
 {
   if(argc < 2)
   {
-    printf("invalid arguments provided. Please see documentation for proper use of the server.");
+    printf("invalid arguments provided. Please see documentation for proper use of the server.\n");
     return 1;
   }
 

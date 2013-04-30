@@ -129,7 +129,7 @@ int parse_server_response(char* responseBuffer)
         int i;
         for(i = 0; i < numResults; i++)
         {
-          results[i] = atoi(strtok_r(NULL, "&", &savePtr));
+          results[i] = atoi(strtok_r(NULL, ",", &savePtr));
           printf("  result[%d] : %d\n", i, results[i]);
         }
         printf("\n");
